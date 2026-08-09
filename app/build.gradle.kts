@@ -5,6 +5,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Versión única del asistente; release-please la actualiza (marca x-release-please-version)
+val appVersionName: String = "0.1.0" // x-release-please-version
+
+// versionCode derivado de la versión: crece con cada release de forma monotónica.
+val appVersionCode: Int = appVersionName
+    .split('.')
+    .mapNotNull { it.toIntOrNull() }
+    .let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
+
 android {
     namespace = "com.jarbis.alexa"
     compileSdk = 35
@@ -13,8 +22,8 @@ android {
         applicationId = "com.jarbis.alexa"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
