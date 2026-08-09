@@ -31,6 +31,10 @@ class MusicBridgeState(private val appContext: Context) {
     val controller: MusicController by lazy { MusicController(cache) }
     val client: PipedClient by lazy { PipedClient() }
 
+    /** Si hay algo reproduciéndose ahora mismo (lo marca el servicio). */
+    @Volatile
+    var isPlaying: Boolean = false
+
     /** Resolver de "música parecida" que inyecta el motor del asistente. */
     @Volatile
     var nextResolver: (suspend (String) -> MusicTrack?)? = null

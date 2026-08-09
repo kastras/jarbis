@@ -60,15 +60,34 @@ class MusicPlayerService : MediaSessionService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                MusicBridge.state(this).isPlaying = false
                 player?.stop()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_NEXT -> {
+                val currentId = player?.currentMediaItem?.mediaId
+                if (!currentId.isNullOrBlank()) enqueueNext(currentId)
+                return START_STICKY
+            }
+            ACTION_DUCK -> {
+                applyVolume(AppConfig.MUSIC_DUCK_VOLUME)
+                return START_STICKY
+            }
+            ACTION_UNDUCK -> {
+                applyVolume(1f)
+                return START_STICKY
+            }
         }
         val track = intent.trackFor() ?: return START_STICKY
         play(track)
         return START_STICKY
+    }
+
+    /** Aplica el volumen al reproductor preservando el primer intent. */
+    private fun applyVolume(volume: Float) {
+        player?.volume = volume
     }
 
     private fun play(track: MusicTrack) {
@@ -82,9 +101,11 @@ class MusicPlayerService : MediaSessionService() {
             exo.setMediaItem(mediaItem)
             exo.prepare()
             exo.playWhenReady = true
+            MusicBridge.state(this).isPlaying = true
             startForeground(AppConfig.MUSIC_NOTIFICATION_ID, buildNotification(track.title))
         } catch (e: Exception) {
             Log.e(TAG, "No se pudo reproducir «${track.title}»", e)
+            MusicBridge.state(this).isPlaying = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
@@ -139,7 +160,10 @@ class MusicPlayerService : MediaSessionService() {
         const val EXTRA_FILE = "file_path"
         const val EXTRA_TITLE = "title"
         const val ACTION_PLAY = "com.jarbis.alexa.music.PLAY"
+        const val ACTION_NEXT = "com.jarbis.alexa.music.NEXT"
         const val ACTION_STOP = "com.jarbis.alexa.music.STOP"
+        const val ACTION_DUCK = "com.jarbis.alexa.music.DUCK"
+        const val ACTION_UNDUCK = "com.jarbis.alexa.music.UNDUCK"
 
         private fun Intent?.trackFor(): MusicTrack? {
             if (this == null || action != ACTION_PLAY) return null
@@ -169,6 +193,35 @@ class MusicPlayerService : MediaSessionService() {
                 context.stopService(intent)
             } catch (_: Exception) {
                 // servicio aún no arrancado
+            }
+        }
+
+        /** Pide al servicio saltar a la siguiente canción "parecida". */
+        fun next(context: Context) {
+            val intent = Intent(context, MusicPlayerService::class.java).setAction(ACTION_NEXT)
+            try {
+                context.startService(intent)
+            } catch (_: Exception) {
+                // servicio no arrancado
+            }
+        }
+
+        /** Baja el volumen de la música mientras el asistente escucha/responde. */
+        fun duck(context: Context) {
+            sendAction(context, ACTION_DUCK)
+        }
+
+        /** Restaura el volumen de la música. */
+        fun unduck(context: Context) {
+            sendAction(context, ACTION_UNDUCK)
+        }
+
+        private fun sendAction(context: Context, action: String) {
+            val intent = Intent(context, MusicPlayerService::class.java).setAction(action)
+            try {
+                context.startService(intent)
+            } catch (_: Exception) {
+                // servicio no arrancado
             }
         }
     }

@@ -10,7 +10,24 @@ búsqueda a una pista reproducible, la descarga a una **caché local** con
 **cuota** configurable y la reproduce en segundo plano, encadenando canciones
 "parecidas" al terminar cada una. La reproducción no interfiere con la escucha
 continua del asistente (Vosk), solo baja el volumen mientras el asistente
-habla (duck).
+escucha el comando (duck). Además acepta **comandos de control** de la
+reproducción con confirmación hablada: siguiente, parar y volumen.
+
+## Comandos de música (es/en)
+
+- Búsqueda: `pon`, `toca`, `ponme`, `reproduce`, `reproducir`, `busca`,
+  `buscar`, `buscame`, `dame`, `suena`, `escucha`, `quiero escuchar`,
+  `dale play`, `pasame`, `echame`, `saca` (en: `play`, `play me`, `search`,
+  `find`, `listen to`). Extrae la consulta descartando el verbo + muletillas
+  (`MusicQueryParser.extract`).
+- Control siguiente: `siguiente`, `pasa canción`, `otra canción` → `nextSong()`.
+- Control parar: `para`, `para la música`, `parar` → `stopMusic()`.
+- Control volumen: `sube el volumen`, `baja el volumen` → `volumeUp/Down()`.
+- Cada control devuelve una **confirmación** hablada ("Siguiente canción.",
+  "Música parada.", "Subo el volumen."), o "No hay música sonando."
+- `MusicControl.command()` decide si la frase es control ANTES de tratarla
+  como nueva búsqueda; "para mañana" NO es parar (solo "para" a secas o
+  "para la música").
 
 ## Arquitectura (archivos en `app/src/main/java/com/jarbis/alexa/music/`)
 
@@ -26,7 +43,7 @@ habla (duck).
 | `CacheStore.kt` | Índice JSON (kotlinx), cuota/evicción por `playCount`. |
 | `MusicPlayerService.kt` | `MediaSessionService` con ExoPlayer; encadena "parecidas" al terminar. |
 | `MusicBridge.kt` | Estado compartido entre motor y servicio (`MusicBridgeState`). |
-| `PlaybackController.kt` | Ducking `AUDIOFOCUS_TRANSIENT_MAY_DUCK` mientras responde el asistente. |
+| `PlaybackController.kt` | Ducking `AUDIOFOCUS_TRANSIENT_MAY_DUCK` mientras el asistente escucha el comando (se deshace al capturar la orden). |
 
 ## Flujo de resolución
 
@@ -152,6 +169,9 @@ Instrumentados (emulador, requiere sistema idle): `./gradlew :app:connectedDebug
 
 ## Puntos de entrada
 
-- `MusicBridge.state(...).resolve(query)` → `MusicTrack?` — lo usa la VM.
+- `MusicBridge.state(...).resolve(query)` → `MusicTrack?` — lo usa el motor.
+- `MusicBridge.state(...).isPlaying` — marca si hay algo en reproducción
+  (para que el motor sepa si responden los controles).
 - `MusicPlayerService.intentFor(context, track)` para reproducir.
 - `MusicPlayerService.stop(context)` para detener.
+- `MusicPlayerService.next(context)` para saltar a la siguiente "parecida".

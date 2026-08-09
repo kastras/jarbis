@@ -28,10 +28,13 @@ Las frases por las que el asistente decide a qué **módulo** va un **comando**;
 **Módulo de comando** que responde con el estado del tiempo en una **ciudad** (temperatura y condición).
 
 **Música**:
-**Módulo de comando** que reproduce en segundo plano la **búsqueda** pedida al activar, guarda una copia local de las canciones (con un **límite de disco**) y encadena canciones parecidas al terminar cada una.
+**Módulo de comando** que reproduce en segundo plano la **búsqueda** pedida al activar, guarda una copia local de las canciones (con un **límite de disco**), encadena canciones parecidas al terminar cada una y responde con una **respuesta** de confirmación a **comandos de control** de lo que suena (siguiente, parar, subir/bajar el volumen).
 
 **Respuesta**:
 El texto que el asistente pronuncia (TTS) o abre en pantalla tras ejecutar un **módulo**.
+
+**Comando de control**:
+**Comando** que en lugar de pedir algo nuevo ordena cambiar lo que suena: siguiente canción, parar, o subir/bajar el volumen. Lo despacha el **Módulo Música** (p.ej. "siguiente canción", "para", "sube el volumen") y devuelve una **respuesta** de confirmación.
 
 **Idioma**:
 Variedad de idioma (es/en) en la que se escucha y responde al asistente; se elige por el usuario y afecta al reconocimiento y a la voz.

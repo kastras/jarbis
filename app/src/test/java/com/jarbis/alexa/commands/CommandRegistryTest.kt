@@ -42,4 +42,45 @@ class CommandRegistryTest {
         assertTrue(registry.matching("qué tiempo hace ahora", Locale.forLanguageTag("es")) is WeatherCommand)
         assertTrue(registry.matching("play a song", Locale.US) is MusicCommand)
     }
+
+    @Test
+    fun `busca queen enruta a musica`() {
+        assertTrue(registry.matching("busca queen", Locale.forLanguageTag("es")) is MusicCommand)
+    }
+
+    @Test
+    fun `siguiente cancion enruta a musica`() {
+        assertTrue(registry.matching("siguiente cancion", Locale.forLanguageTag("es")) is MusicCommand)
+    }
+
+    @Test
+    fun `para la musica enruta a musica`() {
+        assertTrue(registry.matching("para la musica", Locale.forLanguageTag("es")) is MusicCommand)
+    }
+
+    @Test
+    fun `sube el volumen enruta a musica`() {
+        assertTrue(registry.matching("sube el volumen", Locale.forLanguageTag("es")) is MusicCommand)
+    }
+
+    @Test
+    fun `baja el volumen enruta a musica`() {
+        assertTrue(registry.matching("baja el volumen", Locale.forLanguageTag("es")) is MusicCommand)
+    }
+
+    @Test
+    fun `match por palabra completa evita falsos positivos`() {
+        assertNull(registry.matching("ese disco lo compone un artista", Locale.forLanguageTag("es")))
+        assertNull(registry.matching("me respondió otra cosa", Locale.forLanguageTag("es")))
+    }
+
+    @Test
+    fun `tiempo para manana gana weather sobre para`() {
+        assertTrue(registry.matching("tiempo para mañana", Locale.forLanguageTag("es")) is WeatherCommand)
+    }
+
+    @Test
+    fun `palabra mas larga gana cuando hay varias`() {
+        assertTrue(registry.matching("pon musica de queen", Locale.forLanguageTag("es")) is MusicCommand)
+    }
 }

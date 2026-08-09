@@ -78,6 +78,15 @@ fun AssistantScreen(vm: AssistantViewModel) {
                 TextButton(onClick = { vm.simulateCommand("pon música de queen") }) {
                     Text("Probar: música")
                 }
+                TextButton(onClick = { vm.simulateCommand("siguiente canción") }) {
+                    Text("Probar: siguiente")
+                }
+                TextButton(onClick = { vm.simulateCommand("para la música") }) {
+                    Text("Probar: parar")
+                }
+                TextButton(onClick = { vm.simulateCommand("sube el volumen") }) {
+                    Text("Probar: subir volumen")
+                }
             }
         }
 

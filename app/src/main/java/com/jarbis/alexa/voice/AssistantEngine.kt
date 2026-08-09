@@ -58,6 +58,7 @@ class AssistantEngine(context: Context) {
     private val settingsStore = SettingsStore(appContext)
     private val mic = MicInput()
     private val tts = TtsManager(appContext)
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
     private val weatherClient = OpenMeteoWeatherClient()
     private val musicBridge = MusicBridge.state(appContext)
     private val playbackController = PlaybackController(appContext)
@@ -78,6 +79,7 @@ class AssistantEngine(context: Context) {
 
     @Volatile private var phase: Phase = Phase.IDLE
     private val commandBuffer = mutableListOf<ShortArray>()
+    private val vad = VoiceActivityDetector()
     private val logs = ArrayList<LogEntry>()
 
     private val uiState = MutableStateFlow(UiState())
@@ -151,7 +153,10 @@ class AssistantEngine(context: Context) {
                 if (wakeDetector?.accept(chunk) == true) onWakeTriggered()
             }
             Phase.COMMAND -> {
-                synchronized(commandBuffer) { commandBuffer.add(chunk) }
+                synchronized(commandBuffer) {
+                    commandBuffer.add(chunk)
+                    vad.accept(chunk)
+                }
             }
             else -> Unit
         }
@@ -160,12 +165,28 @@ class AssistantEngine(context: Context) {
     private fun onWakeTriggered() {
         if (phase != Phase.WAKE) return
         synchronized(commandBuffer) { commandBuffer.clear() }
+        vad.reset()
         phase = Phase.COMMAND
         playbackController.duck()
+        MusicPlayerService.duck(appContext)
         log(LogKind.WAKE, "Despertado por «${currentSettings.wakeWord}»")
         tts.beep()
         runScope?.launch {
-            delay(AppConfig.COMMAND_WINDOW_MS)
+            // Escucha hasta detectar silencio tras la voz, o la ventana dura.
+            val start = System.currentTimeMillis()
+            var done = false
+            while (!done && System.currentTimeMillis() - start < AppConfig.COMMAND_WINDOW_MS) {
+                val silent = synchronized(commandBuffer) { vad.isSilent(AppConfig.SILENCE_END_MS) }
+                if (silent) {
+                    log(LogKind.INFO, "Comando terminado por silencio (${vad.lastSpeechMs})")
+                    done = true
+                } else {
+                    delay(100)
+                }
+            }
+            if (!vad.hasSpeech) {
+                log(LogKind.INFO, "Sin voz detectada en la ventana de comando")
+            }
             if (phase == Phase.COMMAND) finalizeCommand()
         }
     }
@@ -239,11 +260,43 @@ class AssistantEngine(context: Context) {
                 android.util.Log.e(TAG, "No se pudo arrancar la reproducción", e)
             }
         }?.title
+
+        override suspend fun nextSong(): Boolean {
+            if (!musicBridge.isPlaying) return false
+            MusicPlayerService.next(appContext)
+            return true
+        }
+
+        override suspend fun stopMusic(): Boolean {
+            val wasPlaying = musicBridge.isPlaying
+            MusicPlayerService.stop(appContext)
+            return wasPlaying
+        }
+
+        override suspend fun volumeUp(): Boolean {
+            audioManager.adjustStreamVolume(
+                android.media.AudioManager.STREAM_MUSIC,
+                android.media.AudioManager.ADJUST_RAISE,
+                0,
+            )
+            return true
+        }
+
+        override suspend fun volumeDown(): Boolean {
+            audioManager.adjustStreamVolume(
+                android.media.AudioManager.STREAM_MUSIC,
+                android.media.AudioManager.ADJUST_LOWER,
+                0,
+            )
+            return true
+        }
     }
 
     private fun afterSpeaking() {
-        playbackController.unDuck()
         if (runScope != null && (phase == Phase.SPEAKING || phase == Phase.IDLE)) {
+            // La respuesta ha terminado: la música vuelve a su volumen.
+            playbackController.unDuck()
+            MusicPlayerService.unduck(appContext)
             phase = Phase.WAKE
             wakeDetector?.reset()
             pushState()
@@ -278,6 +331,8 @@ class AssistantEngine(context: Context) {
         wakeDetector = null
         model?.close()
         model = null
+        playbackController.unDuck()
+        MusicPlayerService.unduck(appContext)
         phase = Phase.IDLE
         log(LogKind.INFO, "Asistente detenido")
     }
