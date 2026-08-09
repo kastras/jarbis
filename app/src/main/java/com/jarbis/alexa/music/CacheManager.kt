@@ -1,6 +1,7 @@
 package com.jarbis.alexa.music
 
 import android.content.Context
+import android.util.Log
 import com.jarbis.alexa.AppConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,8 +40,12 @@ class CacheManager @JvmOverloads constructor(
             try {
                 val response = okHttp.newCall(Request.Builder().url(audioUrl).build()).execute()
                 response.use { resp ->
-                    if (!resp.isSuccessful) return@withContext null
+                    if (!resp.isSuccessful) {
+                        Log.w(TAG, "Descarga de $videoId ($audioUrl) falló: HTTP ${resp.code}")
+                        return@withContext null
+                    }
                     val ext = extensionOf(audioUrl)
+                    if (!rootDir.exists()) rootDir.mkdirs()
                     val file = File(rootDir, "$videoId$ext")
                     resp.body?.byteStream()?.use { input ->
                         file.outputStream().use { output -> input.copyTo(output) }
@@ -50,9 +55,11 @@ class CacheManager @JvmOverloads constructor(
                     store.evictToFit(AppConfig.MUSIC_CACHE_MAX_BYTES, protectedVideoId = videoId)
                     file
                 }
-            } catch (_: IOException) {
+            } catch (e: IOException) {
+                Log.w(TAG, "Descarga de $videoId falló (IOException): ${e.message} / ${e.cause?.message}")
                 null
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w(TAG, "Descarga de $videoId ($audioUrl) falló: ${e.message}")
                 null
             }
         }
@@ -73,5 +80,6 @@ class CacheManager @JvmOverloads constructor(
 
     companion object {
         const val DIR_NAME = "music_cache"
+        private const val TAG = "CacheManager"
     }
 }

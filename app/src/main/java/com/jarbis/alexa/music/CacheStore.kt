@@ -4,7 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.text.Normalizer
 
 /** Entrada del índice de canciones cacheadas en local. */
 @Serializable
@@ -18,11 +17,6 @@ data class CachedSong(
 
 @Serializable
 data class CacheIndex(val songs: MutableList<CachedSong> = mutableListOf())
-
-/** Normaliza para cruces robustos (minúsculas, sin acentos ni puntuación). */
-private fun normalized(s: String): String =
-    Normalizer.normalize(s.trim().lowercase(), Normalizer.Form.NFD)
-        .replace(Regex("[\\p{M}\\p{P}\\p{S}]"), "")
 
 /**
  * Índice persistente de la caché de música (JSON con kotlinx-serialization,
@@ -73,32 +67,28 @@ class CacheStore(
         persist()
     }
 
-    /** Búsqueda local para el "play query" sin red: mejor match por título. */
+    /**
+     * Búsqueda local difusa para "pon X": devuelve la canción cacheada cuyo
+     * título se parece más a [query] (ver [FuzzyMatch]), tolerante a typos y
+     * palabras parciales. Devuelve null si no hay ninguna parecida, para que
+     * el controlador recurra a los orígenes remotos. El fallback a [mostPlayed]
+     * es responsabilidad del llamante (offline).
+     */
     fun bestLocalMatch(query: String): CachedSong? {
-        if (query.isBlank()) return mostPlayed()
-        val q = normalized(query)
-        val scored = index.songs.map { song ->
-            song to score(normalized(song.title), q)
+        if (query.isBlank()) return null
+        val normalizedQuery = FuzzyMatch.normalize(query)
+        val matches = index.songs.mapNotNull { song ->
+            val score = FuzzyMatch.matchScore(song.title, normalizedQuery)
+            if (score > 0) song to score else null
         }
-val matches = scored.filter { it.second > 0 }
-        return if (matches.isNotEmpty()) {
-            matches.maxWith(compareBy({ it.second }, { it.first.playCount }, { it.first.lastPlayedEpochMillis })).first
-        } else {
-            mostPlayed()
-        }
+        return matches.maxWithOrNull(
+            compareBy({ it.second }, { it.first.playCount }, { it.first.lastPlayedEpochMillis })
+        )?.first
     }
 
     /** Mejor canción cacheada (por playCount, desempate lastPlayed) para fallback offline. */
     fun mostPlayed(): CachedSong? =
         index.songs.maxWithOrNull(compareBy({ it.playCount }, { it.lastPlayedEpochMillis }))
-
-    /** Peso del match de título (más alto = mejor). */
-    private fun score(title: String, query: String): Int {
-        if (title.contains(query)) return 3
-        val qWords = query.split(" ")
-        if (qWords.all { token -> title.contains(token) && token.isNotBlank() }) return 2
-        return 0
-    }
 
     /**
      * Evictúa hasta encajar bajo [maxBytes]. Nunca toca [protectedVideoId]
@@ -139,6 +129,3 @@ val matches = scored.filter { it.second > 0 }
         indexFile.writeText(json.encodeToString(CacheIndex.serializer(), index))
     }
 }
-
-/** Par (canción, puntuación) usado internamente para el match local. */
-private data class ScoreEntry(val song: CachedSong, val score: Int)

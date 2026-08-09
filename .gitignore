@@ -16,3 +16,6 @@ captures/
 
 # Kotlin
 .kotlin/
+
+# APK generado por build-apk.sh
+/jarbis-debug.apk

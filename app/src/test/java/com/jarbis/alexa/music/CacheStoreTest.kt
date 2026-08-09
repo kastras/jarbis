@@ -3,6 +3,7 @@ package com.jarbis.alexa.music
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -109,6 +110,70 @@ class CacheStoreTest {
         val match = store.bestLocalMatch("imagine dragons")
         assertNotNull(match)
         assertEquals("yy", match?.videoId)
+    }
+
+    @Test
+    fun `bestLocalMatch devuelve null cuando no hay match real`() {
+        val store = CacheStore(tmp.root)
+        store.withFile("a1", 10).withFile("b2", 10)
+
+        val match = store.bestLocalMatch("coldplay")
+
+        assertNull(match)
+    }
+
+    @Test
+    fun `bestLocalMatch con query vacio devuelve null`() {
+        val store = CacheStore(tmp.root)
+        store.withFile("a1", 10)
+
+        assertNull(store.bestLocalMatch(""))
+    }
+
+    @Test
+    fun `bestLocalMatch encontrara búsquedas no exactas por typo de una palabra`() {
+        val store = CacheStore(tmp.root)
+        store.put(CachedSong("rp1", "rp1.m4a", "The Rappers Avion"))
+        store.recordPlayed("rp1", atEpochMillis = 5)
+
+        val match = store.bestLocalMatch("rapers avion")
+
+        assertNotNull(match)
+        assertEquals("rp1", match?.videoId)
+    }
+
+    @Test
+    fun `bestLocalMatch encontrara por prefijo parcial`() {
+        val store = CacheStore(tmp.root)
+        store.put(CachedSong("rp1", "rp1.m4a", "The Rappers Avion"))
+
+        val match = store.bestLocalMatch("rap")
+
+        assertNotNull(match)
+        assertEquals("rp1", match?.videoId)
+    }
+
+    @Test
+    fun `bestLocalMatch ordena por semejanza si hay varias que encajan`() {
+        val store = CacheStore(tmp.root)
+        store.put(CachedSong("exact2", "exact2.m4a", "Rappers Avion"))
+        store.put(CachedSong("parecido", "parecido.m4a", "The Everything"))
+        store.recordPlayed("exact2", atEpochMillis = 3)
+
+        val match = store.bestLocalMatch("rappers avion")
+
+        assertNotNull(match)
+        assertEquals("exact2", match?.videoId)
+    }
+
+    @Test
+    fun `bestLocalMatch no false positiva con titulos totalmente distintos`() {
+        val store = CacheStore(tmp.root)
+        store.put(CachedSong("cold1", "cold1.m4a", "Imagine Dragons - Radioactive"))
+
+        val match = store.bestLocalMatch("coldplay something")
+
+        assertNull(match)
     }
 
     @Test

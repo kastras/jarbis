@@ -110,4 +110,20 @@ fun `search devuelve el primer video con audio de la respuesta`() = runTest {
         assertEquals(2, related.size)
         assertEquals("rel1", PipedClient.videoOf(related[0]))
     }
+
+    @Test
+    fun `si todas las instancias caen devuelve null sin lanzar`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(502))
+
+        val result = client().search("queen")
+        assertNull(result)
+    }
+
+    @Test
+    fun `related sin red devuelve lista vacia sin lanzar`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        val related = client().related("abc")
+        assertEquals(0, related.size)
+    }
 }

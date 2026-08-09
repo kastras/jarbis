@@ -1,11 +1,11 @@
 package com.jarbis.alexa.music
 
+import android.util.Log
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.GET
@@ -98,25 +98,31 @@ class PipedClient(
         api.next(videoId).related.filter { it.type == "stream" && it.title.isNotBlank() }
     } ?: emptyList()
 
+    /** Recorre las instancias y devuelve el primer resultado útil. Nunca lanza:
+     * si todas fallan (caídas, HTML, rate-limit…) se devuelve null y la llamada
+     * de negocio responde de forma elegante. */
     private suspend fun <T> tryInstances(block: suspend (PipedApi) -> T?): T? {
-        var lastException: Exception? = null
         for (base in instances) {
             try {
                 val result = block(apiFor(base))
                 if (result != null) return result
-            } catch (e: HttpException) {
-                lastException = e
             } catch (e: Exception) {
-                lastException = e
+                Log.w(TAG, "Instancia $base no disponible (${e.javaClass.simpleName}: ${e.message})")
             }
         }
-        if (lastException == null) return null
-        throw lastException
+        return null
     }
 
     companion object {
-        /** Instancias públicas gestionadas por la comunidad de Piped (espejo kavinrocks). */
+        private const val TAG = "PipedClient"
+
+        /**
+         * Instancias públicas gestionadas por la comunidad de Piped. El orden
+         * importa: primero las que siguen respondiendo hoy. La lista entera se
+         * recorre en fallback; ninguna caída debe tumbar al asistente.
+         */
         val DEFAULT_INSTANCES = listOf(
+            "https://api.piped.private.coffee",
             "https://pipedapi.kavin.rocks",
             "https://pipedapi.adminforge.de",
             "https://phoenix.vern.cc",

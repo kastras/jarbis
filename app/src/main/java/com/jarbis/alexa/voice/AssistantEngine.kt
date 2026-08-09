@@ -16,6 +16,7 @@ import com.jarbis.alexa.settings.AppSettings
 import com.jarbis.alexa.settings.SettingsStore
 import com.jarbis.alexa.tts.TtsManager
 import com.jarbis.alexa.weather.OpenMeteoWeatherClient
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -63,7 +64,12 @@ class AssistantEngine(context: Context) {
     private val allModules: List<CommandModule> = DefaultModules.all
     private val TAG = "Jarbis"
 
-    private val lifetimeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Red de seguridad: ninguna corrutina del motor puede tumbar la app. */
+    private val uncaughtHandler = CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.e(TAG, "Corrutina no gestionada", throwable)
+    }
+
+    private val lifetimeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO + uncaughtHandler)
     private var runScope: CoroutineScope? = null
 
     private var model: Model? = null
@@ -96,7 +102,7 @@ class AssistantEngine(context: Context) {
 
     fun start() {
         if (runScope != null) return
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + uncaughtHandler)
         runScope = scope
         phase = Phase.LOADING
         pushState()
@@ -222,12 +228,17 @@ class AssistantEngine(context: Context) {
         override val locale get() = currentSettings.language.ttsLocale
         override val city get() = currentSettings.city
         override suspend fun weatherFor(city: String) = weatherClient.currentWeather(city)
-        override suspend fun playMusic(query: String): String? =
-            musicBridge.resolve(query)?.also { track ->
+        override suspend fun playMusic(query: String): String? = runCatching {
+            musicBridge.resolve(query)
+        }.getOrNull()?.also { track ->
+            runCatching {
                 MusicPlayerService.intentFor(appContext, track).let { intent ->
-                    runCatching { androidx.core.content.ContextCompat.startForegroundService(appContext, intent) }
+                    androidx.core.content.ContextCompat.startForegroundService(appContext, intent)
                 }
-            }?.title
+            }.onFailure { e ->
+                android.util.Log.e(TAG, "No se pudo arrancar la reproducción", e)
+            }
+        }?.title
     }
 
     private fun afterSpeaking() {

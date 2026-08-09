@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -72,23 +73,33 @@ class MusicPlayerService : MediaSessionService() {
 
     private fun play(track: MusicTrack) {
         val exo = player ?: return
-        val mediaItem = MediaItem.Builder()
-            .setUri(track.uri)
-            .setMediaId(track.videoId)
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).build())
-            .build()
-        exo.setMediaItem(mediaItem)
-        exo.prepare()
-        exo.playWhenReady = true
-        startForeground(AppConfig.MUSIC_NOTIFICATION_ID, buildNotification(track.title))
+        try {
+            val mediaItem = MediaItem.Builder()
+                .setUri(track.uri)
+                .setMediaId(track.videoId)
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(track.title).build())
+                .build()
+            exo.setMediaItem(mediaItem)
+            exo.prepare()
+            exo.playWhenReady = true
+            startForeground(AppConfig.MUSIC_NOTIFICATION_ID, buildNotification(track.title))
+        } catch (e: Exception) {
+            Log.e(TAG, "No se pudo reproducir «${track.title}»", e)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
     /** Terminó una canción: pide la siguiente "parecida" y encadena. */
     private fun enqueueNext(finishedId: String) {
         val resolver = MusicBridge.state(this).nextResolver ?: return
         scope.launch {
-            val track = resolver(finishedId) ?: return@launch
-            if (track.videoId != finishedId) play(track)
+            try {
+                val track = resolver(finishedId) ?: return@launch
+                if (track.videoId != finishedId) play(track)
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo encadenar la siguiente canción", e)
+            }
         }
     }
 
@@ -122,6 +133,8 @@ class MusicPlayerService : MediaSessionService() {
     }
 
     companion object {
+        private const val TAG = "MusicPlayerService"
+
         const val EXTRA_VIDEO_ID = "video_id"
         const val EXTRA_FILE = "file_path"
         const val EXTRA_TITLE = "title"

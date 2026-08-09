@@ -18,6 +18,9 @@ runner = "1.6.2"
 espresso = "3.6.1"
 testExt = "1.2.1"
 archCoreTesting = "2.2.0"
+robolectric = "4.14.1"
+newpipeExtractor = "v0.26.4"
+desugarJdkLibsNio = "2.1.4"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -43,6 +46,9 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+newpipe-extractor = { module = "com.github.teamnewpipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
+desugar-jdk-libs-nio = { module = "com.android.tools:desugar_jdk_libs_nio", version.ref = "desugarJdkLibsNio" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "runner" }
 androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "testExt" }
 androidx-test-rules = { module = "androidx.test:rules", version = "1.6.1" }
