@@ -6,7 +6,7 @@ plugins {
 }
 
 // Versión única del asistente; release-please la actualiza (marca x-release-please-version)
-val appVersionName: String = "0.2.0" // x-release-please-version
+val appVersionName: String = "0.3.0" // x-release-please-version
 
 // versionCode derivado de la versión: crece con cada release de forma monotónica.
 val appVersionCode: Int = appVersionName
