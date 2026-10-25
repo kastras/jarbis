@@ -115,6 +115,52 @@ class MusicControllerTest {
     }
 
     /** Resolver de prueba que registra si se le pidió una búsqueda. */
+    @Test
+    fun `busqueda manual presenta resultados y usa respaldo sin elegir la cache`() = runTest {
+        val cache = CacheManager(context)
+        seedCache(cache, "local1", "Queen local")
+        val choices = listOf(ResolvedTrack("live", "Queen Live"), ResolvedTrack("studio", "Queen Studio"))
+        val resolver = object : MusicResolver {
+            override suspend fun search(query: String): ResolvedTrack? = error("Debe buscar una lista")
+            override suspend fun searchResults(query: String) = choices
+            override suspend fun audioUrlFor(videoId: String): String? = null
+            override suspend fun related(videoId: String) = emptyList<ResolvedTrack>()
+        }
+        val controller = MusicController(cache, listOf(FallingResolver(), resolver))
+        assertEquals(choices, controller.searchResults("queen"))
+        assertTrue(MusicController(cache, emptyList()).searchResults("queen").isEmpty())
+    }
+
+    @Test
+    fun `seleccion manual devuelve el id elegido sin esperar la descarga ni sustituirlo`() = runTest {
+        val cache = CacheManager(context)
+        seedCache(cache, "other", "Queen Live")
+        val requested = mutableListOf<String>()
+        val resolver = object : MusicResolver {
+            override suspend fun search(query: String): ResolvedTrack? = error("No debe repetir la búsqueda")
+            override suspend fun audioUrlFor(videoId: String): String {
+                requested.add(videoId)
+                return server.url("/selected.m4a").toString()
+            }
+            override suspend fun related(videoId: String) = emptyList<ResolvedTrack>()
+        }
+        val controller = MusicController(cache, listOf(resolver))
+        val selected = controller.resolveSelection(ResolvedTrack("selected", "Queen Live"))
+        assertEquals("selected", selected?.videoId)
+        assertEquals(listOf("selected"), requested)
+        assertEquals(server.url("/selected.m4a").toString(), selected?.uri.toString())
+        assertNull(cache.store().find("selected"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `seleccion manual no reproduce otra cancion si falla la seleccion`() = runTest {
+        val cache = CacheManager(context)
+        seedCache(cache, "other", "Queen Live")
+        val controller = MusicController(cache, listOf(FallingResolver()))
+        assertNull(controller.resolveSelection(ResolvedTrack("missing", "Queen Live")))
+    }
+
     private class ResolverSpy : MusicResolver {
         var searchCalled = false
         override suspend fun search(query: String): ResolvedTrack? {

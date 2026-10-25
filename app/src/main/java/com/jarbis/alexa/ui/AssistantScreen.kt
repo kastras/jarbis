@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import android.net.Uri
+import android.provider.DocumentsContract
+import java.util.Locale
 import com.jarbis.alexa.AssistantViewModel
 import com.jarbis.alexa.Language
 import com.jarbis.alexa.voice.LogEntry
@@ -41,11 +46,23 @@ import com.jarbis.alexa.voice.UiState
 import kotlinx.coroutines.delay
 
 @Composable
-fun AssistantScreen(vm: AssistantViewModel) {
+fun AssistantScreen(
+    vm: AssistantViewModel,
+    onEnableVoice: () -> Unit = { vm.start() },
+    cacheLimitBytes: Long = 4L * 1024 * 1024 * 1024,
+    cacheUsedBytes: Long = 0L,
+    downloadFolderUri: String? = null,
+    onCacheLimit: (String) -> Unit = {},
+    onChooseDownloadFolder: () -> Unit = {},
+    onUseDefaultDownloadFolder: () -> Unit = {},
+) {
     val state by vm.uiState.collectAsState()
 
     var wakeField by remember(state.wakeWord) { mutableStateOf(state.wakeWord) }
     var cityField by remember(state.city) { mutableStateOf(state.city) }
+    var cacheLimitField by remember(cacheLimitBytes) {
+        mutableStateOf(String.format(Locale.US, "%.2f", cacheLimitBytes / (1024.0 * 1024 * 1024)))
+    }
 
     LaunchedEffect(wakeField) {
         delay(400)
@@ -68,25 +85,8 @@ fun AssistantScreen(vm: AssistantViewModel) {
         StatusCard(state)
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = { if (state.running) vm.stop() else vm.start() }) {
-                Text(if (state.running) "Detener" else "Arrancar")
-            }
-            if (state.running) {
-                TextButton(onClick = { vm.simulateCommand("dime el tiempo") }) {
-                    Text("Probar: tiempo")
-                }
-                TextButton(onClick = { vm.simulateCommand("pon música de queen") }) {
-                    Text("Probar: música")
-                }
-                TextButton(onClick = { vm.simulateCommand("siguiente canción") }) {
-                    Text("Probar: siguiente")
-                }
-                TextButton(onClick = { vm.simulateCommand("para la música") }) {
-                    Text("Probar: parar")
-                }
-                TextButton(onClick = { vm.simulateCommand("sube el volumen") }) {
-                    Text("Probar: subir volumen")
-                }
+            Button(onClick = { if (state.running) vm.stop() else onEnableVoice() }) {
+                Text(if (state.running) "Desactivar escucha por voz" else "Activar escucha por voz")
             }
         }
 
@@ -100,8 +100,65 @@ fun AssistantScreen(vm: AssistantViewModel) {
         )
 
         ModulesCard(state.modules, vm)
+        MusicStorageCard(
+            cacheLimitField = cacheLimitField,
+            onCacheLimitField = { cacheLimitField = it },
+            cacheUsedBytes = cacheUsedBytes,
+            downloadFolderUri = downloadFolderUri,
+            onSaveLimit = { onCacheLimit(cacheLimitField) },
+            onChooseFolder = onChooseDownloadFolder,
+            onUseDefaultFolder = onUseDefaultDownloadFolder,
+        )
         LogCard(state.logs)
     }
+}
+
+@Composable
+private fun MusicStorageCard(
+    cacheLimitField: String,
+    onCacheLimitField: (String) -> Unit,
+    cacheUsedBytes: Long,
+    downloadFolderUri: String?,
+    onSaveLimit: () -> Unit,
+    onChooseFolder: () -> Unit,
+    onUseDefaultFolder: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Almacenamiento de música", style = MaterialTheme.typography.titleMedium)
+            Text("Ocupado: ${formatStorageSize(cacheUsedBytes)}", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = cacheLimitField,
+                    onValueChange = { input ->
+                        if (input.matches(Regex("[0-9]*([.,][0-9]*)?"))) onCacheLimitField(input)
+                    },
+                    label = { Text("Límite máximo (GiB)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onSaveLimit) { Text("Guardar") }
+            }
+            Text("Mínimo: 0,25 GiB. Al reducir el límite se borran las descargas menos usadas; la canción en reproducción se conserva hasta que termine.",
+                style = MaterialTheme.typography.bodySmall)
+            Text("Carpeta de descargas: ${downloadFolderUri?.let(::downloadFolderLabel) ?: "Almacenamiento de Jarbis"}",
+                style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onChooseFolder) { Text(if (downloadFolderUri == null) "Elegir carpeta" else "Cambiar carpeta") }
+                if (downloadFolderUri != null) TextButton(onClick = onUseDefaultFolder) { Text("Usar carpeta de Jarbis") }
+            }
+        }
+    }
+}
+
+private fun downloadFolderLabel(value: String): String = runCatching {
+    DocumentsContract.getTreeDocumentId(Uri.parse(value)).substringAfter(':').ifBlank { "Carpeta seleccionada" }
+}.getOrDefault("Carpeta seleccionada")
+
+private fun formatStorageSize(bytes: Long): String = when {
+    bytes >= 1024L * 1024 * 1024 -> String.format(Locale.getDefault(), "%.2f GiB", bytes / (1024.0 * 1024 * 1024))
+    else -> String.format(Locale.getDefault(), "%.0f MiB", bytes / (1024.0 * 1024))
 }
 
 @Composable

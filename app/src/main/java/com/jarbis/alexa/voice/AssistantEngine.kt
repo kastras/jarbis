@@ -138,7 +138,12 @@ class AssistantEngine(context: Context) {
             wakeDetector?.start(listOf(currentSettings.wakeWord))
             phase = Phase.WAKE
             log(LogKind.INFO, "Escuchando… di «${currentSettings.wakeWord}»")
-            mic.start { chunk -> handleChunk(chunk) }
+            val echo = mic.start { chunk -> handleChunk(chunk) }
+            when {
+                echo.enabled -> log(LogKind.INFO, "Cancelación de eco acústico disponible y activa")
+                echo.available -> log(LogKind.ERROR, "Cancelación de eco acústico disponible, pero no se pudo activar")
+                else -> log(LogKind.INFO, "Cancelación de eco acústico no disponible en este dispositivo")
+            }
         } catch (e: Exception) {
             android.util.Log.e(TAG, "mic start error", e)
             phase = Phase.ERROR
@@ -316,11 +321,12 @@ class AssistantEngine(context: Context) {
     fun setModuleEnabled(id: String, enabled: Boolean) { lifetimeScope.launch { settingsStore.setModuleEnabled(id, enabled) } }
 
     private fun restart() {
-        if (runScope == null) return
-        runScope?.cancel()
-        runScope = null
+        if (runScope != null) {
+            runScope?.cancel()
+            runScope = null
+        }
         mic.stop()
-        beginWakeLoop()
+        start()
     }
 
     fun stop() {

@@ -12,6 +12,7 @@ object MusicBridge {
     @Volatile
     private var instance: MusicBridgeState? = null
 
+    @Synchronized
     fun state(context: Context): MusicBridgeState {
         val existing = instance
         if (existing != null) return existing
@@ -34,6 +35,9 @@ class MusicBridgeState(private val appContext: Context) {
     /** Si hay algo reproduciéndose ahora mismo (lo marca el servicio). */
     @Volatile
     var isPlaying: Boolean = false
+
+    @Volatile
+    var hasSession: Boolean = false
 
     /** Resolver de "música parecida" que inyecta el motor del asistente. */
     @Volatile

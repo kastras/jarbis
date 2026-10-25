@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import com.jarbis.alexa.AppConfig
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -15,12 +16,14 @@ class MicInput {
 
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
-    private var audioRecord: AudioRecord? = null
+    @Volatile private var audioRecord: AudioRecord? = null
+    private var echoCanceler: AcousticEchoCanceler? = null
 
     @SuppressLint("MissingPermission")
+    @Synchronized
     @Throws(IllegalStateException::class)
-    fun start(onChunk: (ShortArray) -> Unit) {
-        if (running.get()) return
+    fun start(onChunk: (ShortArray) -> Unit): EchoCancellationStatus {
+        if (running.get()) return echoCancellationStatus()
 
         val minBuffer = AudioRecord.getMinBufferSize(
             AppConfig.SAMPLE_RATE,
@@ -38,14 +41,19 @@ class MicInput {
             "No se pudo abrir el micrófono"
         }
         audioRecord = record
+        val available = runCatching { AcousticEchoCanceler.isAvailable() }.getOrDefault(false)
+        val effect = if (available) runCatching {
+            AcousticEchoCanceler.create(record.audioSessionId)?.also { it.enabled = true }
+        }.getOrNull() else null
+        echoCanceler = effect
         record.startRecording()
         running.set(true)
 
         thread = Thread {
             val buffer = ShortArray(minBuffer)
-            while (running.get()) {
+            while (running.get() && audioRecord === record) {
                 val n = record.read(buffer, 0, buffer.size)
-                if (n > 0) {
+                if (n > 0 && running.get() && audioRecord === record) {
                     onChunk(buffer.copyOf(n))
                 } else {
                     Thread.sleep(10)
@@ -53,19 +61,29 @@ class MicInput {
             }
         }.apply {
             name = "mic-input"
-            start()
+              start()
         }
+        return EchoCancellationStatus(available, effect?.enabled == true)
+    }
+
+    private fun echoCancellationStatus(): EchoCancellationStatus {
+        val available = runCatching { AcousticEchoCanceler.isAvailable() }.getOrDefault(false)
+        return EchoCancellationStatus(available, echoCanceler?.enabled == true)
     }
 
     @Synchronized
     fun stop() {
         running.set(false)
+        val record = audioRecord
+        audioRecord = null
+        // Desbloquea read antes de esperar al hilo; no entrega más chunks al cerrar Vosk.
+        runCatching { record?.stop() }
         thread?.join(500)
         thread = null
-        audioRecord?.let {
-            runCatching { it.stop() }
-            it.release()
-        }
-        audioRecord = null
+        runCatching { echoCanceler?.release() }
+        echoCanceler = null
+        record?.release()
     }
 }
+
+data class EchoCancellationStatus(val available: Boolean, val enabled: Boolean)

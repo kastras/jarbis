@@ -1,5 +1,8 @@
 package com.jarbis.alexa.music
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -13,6 +16,8 @@ data class CachedSong(
     val title: String,
     @SerialName("playCount") val playCount: Int = 0,
     @SerialName("lastPlayed") val lastPlayedEpochMillis: Long = 0L,
+    val artist: String? = null,
+    val artworkFileName: String? = null,
 )
 
 @Serializable
@@ -27,6 +32,7 @@ data class CacheIndex(val songs: MutableList<CachedSong> = mutableListOf())
 class CacheStore(
     private val rootDir: File,
     private val indexFile: File = File(rootDir, "index.json"),
+    private val contentResolver: ContentResolver? = null,
 ) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -41,25 +47,36 @@ class CacheStore(
         }
     }
 
-    fun list(): List<CachedSong> = index.songs.toList()
+    @Synchronized fun list(): List<CachedSong> = index.songs.toList()
 
-    fun find(videoId: String): CachedSong? = index.songs.firstOrNull { it.videoId == videoId }
+    @Synchronized fun find(videoId: String): CachedSong? = index.songs.firstOrNull { it.videoId == videoId }
 
-    fun size(): Int = index.songs.size
+    @Synchronized fun size(): Int = index.songs.size
 
     /** Bytes ocupados por los ficheros cacheados que todavía existen. */
-    fun totalBytes(): Long =
-        index.songs.sumOf { song -> File(rootDir, song.fileName).takeIf { it.exists() }?.length() ?: 0L }
+    @Synchronized fun totalBytes(): Long =
+        index.songs.sumOf { song ->
+            resourceSize(song.fileName) + (song.artworkFileName?.let(::resourceSize) ?: 0L)
+        }
+
+    fun uriFor(song: CachedSong): Uri = resourceUri(song.fileName)
+    fun artworkUriFor(song: CachedSong): Uri? = song.artworkFileName?.let(::resourceUri)
+    fun exists(song: CachedSong): Boolean = resourceExists(song.fileName)
 
     /** Registra (o actualiza) una canción recién descargada. */
-    fun put(song: CachedSong) {
+    @Synchronized fun put(song: CachedSong) {
         val existing = index.songs.indexOfFirst { it.videoId == song.videoId }
         if (existing >= 0) index.songs[existing] = song else index.songs.add(song)
         persist()
     }
 
+    @Synchronized fun replaceAll(songs: List<CachedSong>) {
+        index = CacheIndex(songs.toMutableList())
+        persist()
+    }
+
     /** Actualiza una canción existente marcando que acaba de reproducirse. */
-    fun recordPlayed(videoId: String, atEpochMillis: Long = System.currentTimeMillis()) {
+    @Synchronized fun recordPlayed(videoId: String, atEpochMillis: Long = System.currentTimeMillis()) {
         val idx = index.songs.indexOfFirst { it.videoId == videoId }
         if (idx < 0) return
         val song = index.songs[idx]
@@ -74,7 +91,7 @@ class CacheStore(
      * el controlador recurra a los orígenes remotos. El fallback a [mostPlayed]
      * es responsabilidad del llamante (offline).
      */
-    fun bestLocalMatch(query: String): CachedSong? {
+    @Synchronized fun bestLocalMatch(query: String): CachedSong? {
         if (query.isBlank()) return null
         val normalizedQuery = FuzzyMatch.normalize(query)
         val matches = index.songs.mapNotNull { song ->
@@ -87,19 +104,20 @@ class CacheStore(
     }
 
     /** Mejor canción cacheada (por playCount, desempate lastPlayed) para fallback offline. */
-    fun mostPlayed(): CachedSong? =
+    @Synchronized fun mostPlayed(): CachedSong? =
         index.songs.maxWithOrNull(compareBy({ it.playCount }, { it.lastPlayedEpochMillis }))
 
     /**
      * Evictúa hasta encajar bajo [maxBytes]. Nunca toca [protectedVideoId]
      * (la canción que suena). Devuelve las entradas eliminadas.
      */
-    fun evictToFit(maxBytes: Long, protectedVideoId: String? = null): List<CachedSong> {
+    @Synchronized fun evictToFit(maxBytes: Long, protectedVideoId: String? = null,
+        protectedVideoIds: Set<String> = emptySet()): List<CachedSong> {
         val removed = mutableListOf<CachedSong>()
         var overflowing = totalBytes() > maxBytes
         while (overflowing) {
             val candidates = index.songs
-                .filter { fileOf(it).exists() && it.videoId != protectedVideoId }
+                .filter { resourceExists(it.fileName) && it.videoId != protectedVideoId && it.videoId !in protectedVideoIds }
                 .sortedWith(compareBy({ it.playCount }, { it.lastPlayedEpochMillis }))
             val victim = candidates.firstOrNull() ?: break
             removeFile(victim)
@@ -112,12 +130,49 @@ class CacheStore(
     }
 
     private fun removeFile(song: CachedSong) {
-        File(rootDir, song.fileName).delete()
+        deleteResource(song.fileName)
+        song.artworkFileName?.let(::deleteResource)
     }
 
-    private fun fileOf(song: CachedSong): File = File(rootDir, song.fileName)
+    private fun resourceUri(name: String): Uri = if (name.startsWith("content://") || name.startsWith("file://")) {
+        Uri.parse(name)
+    } else Uri.fromFile(File(rootDir, name))
 
-    fun remove(videoId: String) {
+    private fun fileOf(name: String): File? = when {
+        name.startsWith("content://") -> null
+        name.startsWith("file://") -> Uri.parse(name).path?.let(::File)
+        else -> File(rootDir, name)
+    }
+
+    private fun resourceExists(name: String): Boolean {
+        val file = fileOf(name)
+        if (file != null) return file.isFile
+        return runCatching { contentResolver?.openAssetFileDescriptor(resourceUri(name), "r")?.use { true } ?: false }
+            .getOrDefault(false)
+    }
+
+    private fun resourceSize(name: String): Long {
+        val file = fileOf(name)
+        if (file != null) return file.takeIf { it.isFile }?.length() ?: 0L
+        return runCatching {
+            contentResolver?.openAssetFileDescriptor(resourceUri(name), "r")?.use { descriptor ->
+                descriptor.length.takeIf { it >= 0 } ?: querySize(resourceUri(name))
+            } ?: 0L
+        }.getOrDefault(0L)
+    }
+
+    private fun querySize(uri: Uri): Long = runCatching {
+        contentResolver?.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0).coerceAtLeast(0L) else 0L
+        } ?: 0L
+    }.getOrDefault(0L)
+
+    private fun deleteResource(name: String) {
+        val file = fileOf(name)
+        if (file != null) file.delete() else runCatching { contentResolver?.delete(resourceUri(name), null, null) }
+    }
+
+    @Synchronized fun remove(videoId: String) {
         val song = find(videoId) ?: return
         removeFile(song)
         index.songs.removeAll { it.videoId == videoId }

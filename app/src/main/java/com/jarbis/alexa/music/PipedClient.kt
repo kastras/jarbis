@@ -1,6 +1,7 @@
 package com.jarbis.alexa.music
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -20,6 +21,8 @@ data class PipedStreamItem(
     val type: String = "stream",
     val title: String = "",
     val duration: Long = 0L,
+    val uploaderName: String? = null,
+    val thumbnail: String? = null,
     @SerialName("uploadedDate") val uploadedDate: String? = null,
 )
 
@@ -87,6 +90,11 @@ class PipedClient(
         api.search(query).items.firstOrNull { it.type == "stream" && it.title.isNotBlank() }
     }
 
+    suspend fun searchResults(query: String): List<PipedStreamItem> = tryInstances { api ->
+        api.search(query).items.filter { it.type == "stream" && it.title.isNotBlank() }
+            .takeIf { it.isNotEmpty() }
+    } ?: emptyList()
+
     /** Stream audio mejor para un vídeo. */
     suspend fun audioStream(videoId: String): PipedAudioStream? = tryInstances { api ->
         val resp = api.streams(videoId)
@@ -107,6 +115,7 @@ class PipedClient(
                 val result = block(apiFor(base))
                 if (result != null) return result
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 Log.w(TAG, "Instancia $base no disponible (${e.javaClass.simpleName}: ${e.message})")
             }
         }

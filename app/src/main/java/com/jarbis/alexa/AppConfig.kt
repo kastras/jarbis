@@ -16,6 +16,7 @@ object AppConfig {
     const val NOTIFICATION_ID = 1
     const val MUSIC_CHANNEL_ID = "music-playback"
     const val MUSIC_NOTIFICATION_ID = 2
-    /** Cuota máxima de disco para la caché de música (1 GB). */
-    const val MUSIC_CACHE_MAX_BYTES = 1L * 1024 * 1024 * 1024
+    /** Cuota inicial de disco para las descargas musicales (4 GiB). */
+    const val MUSIC_CACHE_MAX_BYTES = 4L * 1024 * 1024 * 1024
+    const val MIN_MUSIC_CACHE_BYTES = 256L * 1024 * 1024
 }

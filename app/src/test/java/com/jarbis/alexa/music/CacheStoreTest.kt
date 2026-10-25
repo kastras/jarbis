@@ -38,6 +38,16 @@ class CacheStoreTest {
     }
 
     @Test
+    fun `descargar siguiente protege tanto la nueva como la que sigue sonando`() {
+        val store = CacheStore(tmp.root)
+        store.withFile("playing", 10).withFile("next", 10).withFile("old", 10)
+        store.evictToFit(20, protectedVideoId = "next", protectedVideoIds = setOf("playing"))
+        assertNotNull(store.find("playing"))
+        assertNotNull(store.find("next"))
+        assertNull(store.find("old"))
+    }
+
+    @Test
     fun `totalBytes suma solo ficheros existentes`() {
         val store = CacheStore(tmp.root)
         store.withFile("a1", 10)

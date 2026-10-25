@@ -15,23 +15,29 @@ class VoskWakeRecognizer(private val model: Model) {
     private var recognizer: Recognizer? = null
     private var wakeWords: List<String> = emptyList()
 
+    @Synchronized
     fun start(wakeWords: List<String>) {
+        recognizer?.close()
         this.wakeWords = wakeWords
         val grammar = WakeGrammar.grammar(wakeWords)
         recognizer = Recognizer(model, AppConfig.SAMPLE_RATE.toFloat(), grammar)
         recognizer?.reset()
     }
 
+    @Synchronized
     fun reset() {
         recognizer?.reset()
     }
 
+    @Synchronized
     fun stop() {
         recognizer?.close()
         recognizer = null
     }
 
     /** Procesa un fragmento; devuelve true si aparece el wake word. */
+    // Vosk es nativo: reset/close concurrentes con accept pueden abortar el proceso.
+    @Synchronized
     fun accept(chunk: ShortArray): Boolean {
         val r = recognizer ?: return false
         if (r.acceptWaveForm(chunk, chunk.size)) {

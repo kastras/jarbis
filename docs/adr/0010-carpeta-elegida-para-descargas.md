@@ -1,0 +1,3 @@
+# Carpeta elegida para las descargas de música
+
+La persona puede elegir una carpeta persistente mediante el selector de documentos de Android; el índice de caché sigue siendo privado y las descargas completas se guardan como documentos en esa carpeta. Al cambiar la ubicación, audio y carátulas se copian antes de actualizar el índice, conservando la ubicación anterior si falla la migración. Se mantiene un temporal privado para la reproducción progresiva, y si se revoca el permiso se informa del problema y no se inician nuevas descargas. Esta opción ofrece control real sobre el almacenamiento sin pedir acceso global a archivos, a cambio de gestionar URI y permisos SAF en lugar de depender únicamente de rutas `File`.

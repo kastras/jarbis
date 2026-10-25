@@ -33,6 +33,39 @@ Las frases por las que el asistente decide a qué **módulo** va un **comando**;
 **Respuesta**:
 El texto que el asistente pronuncia (TTS) o abre en pantalla tras ejecutar un **módulo**.
 
+**Reproductor**:
+Pantalla principal desde la que la persona busca, elige y controla música manualmente, sin necesidad de activar la escucha por voz. Comparte la reproducción con el **Módulo Música**.
+
+**Carátula**:
+Imagen que identifica visualmente una canción en el **reproductor**. Puede no estar disponible; en ese caso se muestra una imagen musical de sustitución.
+
+**Pausar**:
+Suspender la reproducción conservando la canción, su posición y la lista seleccionada.
+
+**Seguir** / **Reanudar**:
+Continuar la reproducción desde la posición conservada al **pausar**.
+
+**Parar en el reproductor**:
+Detener la reproducción manual y volver al inicio de la canción actual, conservando la canción y la lista seleccionada.
+
+**Mi música**:
+Biblioteca que reúne canciones de una **carpeta de música** elegida por la persona y canciones **descargadas** por la aplicación. Permite ver ambas fuentes juntas o filtrarlas por separado. Al elegir una canción, continúa por la lista visible en su orden.
+
+**Carpeta de música**:
+Carpeta elegida por la persona para escuchar sus propios archivos, sin copiarlos a las descargas de la aplicación.
+
+**Descargadas**:
+Canciones guardadas por la aplicación al reproducir música de internet. Están disponibles sin conexión mientras se conserven dentro del **límite de disco**.
+
+**Carpeta de descargas**:
+Ubicación elegida por la persona donde la aplicación guarda las canciones **descargadas**. Es distinta de la **carpeta de música**, que contiene archivos propios y no se copia a las descargas.
+
+**Reproducción durante la descarga**:
+Una canción de internet empieza a sonar al disponer de un búfer inicial y continúa guardándose mientras se escucha. Solo pasa a **Descargadas** cuando su archivo está completo; un archivo parcial no está disponible sin conexión. La reproducción y el guardado comparten una única transferencia de audio.
+
+**Búsqueda manual**:
+Consulta por canción o artista que presenta resultados de internet para que la persona elija cuál reproducir. Tras esa elección, el **reproductor** encadena canciones parecidas.
+
 **Comando de control**:
 **Comando** que en lugar de pedir algo nuevo ordena cambiar lo que suena: siguiente canción, parar, o subir/bajar el volumen. Lo despacha el **Módulo Música** (p.ej. "siguiente canción", "para", "sube el volumen") y devuelve una **respuesta** de confirmación.
 

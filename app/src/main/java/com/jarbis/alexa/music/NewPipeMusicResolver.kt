@@ -2,6 +2,7 @@ package com.jarbis.alexa.music
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.NewPipe
@@ -10,6 +11,7 @@ import org.schabi.newpipe.extractor.linkhandler.SearchQueryHandler
 import org.schabi.newpipe.extractor.search.SearchExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 
 /**
  * Resolutor de música con NewPipeExtractor (sin servidor de terceros): extrae
@@ -18,7 +20,9 @@ import org.schabi.newpipe.extractor.stream.StreamInfo
  */
 class NewPipeMusicResolver : MusicResolver {
 
-    override suspend fun search(query: String): ResolvedTrack? = withContext(Dispatchers.IO) {
+    override suspend fun search(query: String): ResolvedTrack? = searchResults(query).firstOrNull()
+
+    override suspend fun searchResults(query: String): List<ResolvedTrack> = withContext(Dispatchers.IO) {
         runCatching {
             val service = youtubeService()
             val handler: SearchQueryHandler =
@@ -27,14 +31,15 @@ class NewPipeMusicResolver : MusicResolver {
             // fetchPage() dispara la petición y rellena initialData; sin ella
             // getInitialPage() devuelve null (NPE) porque solo se rellena en onFetchPage().
             extractor.fetchPage()
-            for (item in extractor.getInitialPage().getItems()) {
-                val id = youtubeIdOf(item.url) ?: continue
-                if (id.isNotBlank()) return@runCatching ResolvedTrack(id, item.name)
-            }
-            null
+            extractor.getInitialPage().getItems().mapNotNull { item ->
+                youtubeIdOf(item.url)?.let { ResolvedTrack(it, item.name,
+                    (item as? StreamInfoItem)?.uploaderName?.takeIf(String::isNotBlank),
+                    item.thumbnails.lastOrNull()?.url) }
+            }.distinctBy { it.videoId }.take(30)
         }.getOrElse { e ->
+            if (e is CancellationException) throw e
             Log.w(TAG, "Búsqueda NewPipe «$query» falló", e)
-            null
+            emptyList()
         }
     }
 
@@ -47,6 +52,7 @@ class NewPipeMusicResolver : MusicResolver {
             }
             best?.content
         }.getOrElse { e ->
+            if (e is CancellationException) throw e
             Log.w(TAG, "Audio de $videoId falló: ${e.message}", e)
             null
         }
@@ -56,9 +62,12 @@ class NewPipeMusicResolver : MusicResolver {
         runCatching {
             val info = StreamInfo.getInfo(youtubeService(), watchUrl(videoId))
             info.relatedItems.mapNotNull { item ->
-                youtubeIdOf(item.url)?.takeIf { it.isNotBlank() }?.let { ResolvedTrack(it, item.name) }
+                youtubeIdOf(item.url)?.takeIf { it.isNotBlank() }?.let { ResolvedTrack(it, item.name,
+                    (item as? StreamInfoItem)?.uploaderName?.takeIf(String::isNotBlank),
+                    item.thumbnails.lastOrNull()?.url) }
             }
         }.getOrElse { e ->
+            if (e is CancellationException) throw e
             Log.w(TAG, "Relacionadas de $videoId fallaron: ${e.message}")
             emptyList()
         }

@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)
@@ -97,6 +98,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.androidx.arch.core.testing)
+    androidTestImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
 }

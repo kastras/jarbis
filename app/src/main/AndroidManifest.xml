@@ -29,7 +29,11 @@
         <service
             android:name=".music.MusicPlayerService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".MainActivity"

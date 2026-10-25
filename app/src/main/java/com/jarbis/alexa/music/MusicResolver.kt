@@ -1,7 +1,8 @@
 package com.jarbis.alexa.music
 
 /** Búsqueda resuelta en crudo (antes de descargar a caché). */
-data class ResolvedTrack(val videoId: String, val title: String)
+data class ResolvedTrack(val videoId: String, val title: String,
+    val artist: String? = null, val artworkUrl: String? = null)
 
 /**
  * Origen de "dónde sacar música": busca una canción, devuelve la URL de
@@ -10,6 +11,8 @@ data class ResolvedTrack(val videoId: String, val title: String)
  */
 interface MusicResolver {
     suspend fun search(query: String): ResolvedTrack?
+
+    suspend fun searchResults(query: String): List<ResolvedTrack> = listOfNotNull(search(query))
 
     suspend fun audioUrlFor(videoId: String): String?
 
