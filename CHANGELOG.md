@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/kastras/jarbis/compare/v0.2.0...v0.3.0) (2026-10-25)
+
+
+### Features
+
+* new features ([4e9bc95](https://github.com/kastras/jarbis/commit/4e9bc959d728a39cecf2710e8186ee79206b139f))
+
 ## [0.2.0](https://github.com/kastras/jarbis/compare/v0.1.0...v0.2.0) (2026-08-09)
 
 
